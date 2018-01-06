@@ -11,6 +11,12 @@ from glob import glob
 from urllib.request import urlretrieve
 from tqdm import tqdm
 
+import cv2
+
+from numpy.random import rand
+from numpy.random import randn
+from numpy.random import randint
+
 
 class DLProgress(tqdm):
     last_block = 0
@@ -58,7 +64,89 @@ def maybe_download_pretrained_vgg(data_dir):
         os.remove(os.path.join(vgg_path, vgg_filename))
 
 
-def gen_batch_function(data_folder, image_shape):
+def truncated_normal(n, sigma=1, mu=0):
+    x = randn(n)*sigma
+    x[x>2*sigma]=2*sigma
+    x[x<-2*sigma]=-2*sigma
+    return x + mu
+
+def random_shadow(img):
+    # This function directly comes from my project: SDC_ND_P3_Behavioral_Cloning
+
+    # The idea for shadow augmentation came from
+    # https://hackernoon.com/training-a-deep-learning-model-to-steer-a-car-in-99-lines-of-code-ba94e0456e6a
+    # https://chatbotslife.com/using-augmentation-to-mimic-human-driving-496b569760a9
+
+    # Add wedge like shadow
+    xb = rand(2)*img.shape[1]
+    G = np.mgrid[0:img.shape[0], 0:img.shape[1]]
+
+    mask = np.zeros(img.shape[0:2])==0
+    mask[((G[1]-img.shape[1])*img.shape[0] - np.diff(xb)*(G[0]-img.shape[0]))>=0] = 1
+
+    if rand(1)>0.5:
+        mask = mask==1
+    else:
+        mask = mask==0
+
+    brightnessFactor = rand(1)
+    for i in range(3):
+        img[:,:,i][mask] = img[:,:,i][mask]*(brightnessFactor+0.2*rand(1))*0.5
+
+    # Add shadow to random square
+    idx0 = np.sort(randint(0,img.shape[0],2))
+    idx1 = np.sort(randint(0,img.shape[1],2))
+
+    img[idx0[0]:idx0[1],idx1[0]:idx1[1],:] = img[idx0[0]:idx0[1],idx1[0]:idx1[1],:]*(rand(1) + 0.2*rand(1,1,3))*0.7
+    return img
+
+
+def augment_image(X, Y, rot=15., trans=5.):
+    # This function is a re-write of the same function from my project: SDC_ND_P3_Behavioral_Cloning
+
+
+    # ::: Ignore translate, just rotate
+
+    # X translation direction
+    # trans_option = np.random.randint(0,3,1) # (left, center, right)
+    # trans_offset = truncated_normal(1,3.,(trans_option-1.)*trans) # in the range of [-6-trans,6+trans]
+
+    # Rotation direction
+    rot_option = np.random.randint(0,3,1) # (cw, center, ccw)
+    rot_offset = truncated_normal(1,3.,(rot_option-1.)*rot)
+
+    # Random x translation
+    # tx = truncated_normal(1,5.,trans_offset) # [-16-trans,16+trans]
+    # ty = truncated_normal(1,2.,trans_offset)
+
+    # Translate image
+    # M = np.float32([[1.,0.,tx],[0.,1.,ty]])
+    # Xt = cv2.warpAffine(X,M,(X.shape[0:2]),borderMode=cv2.BORDER_REPLICATE)
+    # Xt = cv2.transpose(Xt)
+    #
+    # Yt = cv2.warpAffine(Y,M,(Y.shape[0:2]),borderMode=cv2.BORDER_REPLICATE)
+    # Yt = cv2.transpose(Yt)
+
+    Xt = X
+    Yt = Y
+
+    # Rotate image
+    center = tuple(np.array(X.shape[0:2])/2)
+    th = truncated_normal(1,7.,rot_offset)
+
+    rot_mat = cv2.getRotationMatrix2D(center,th,1.)
+    Xtr = cv2.warpAffine(Xt,rot_mat,Xt.shape[0:2],borderMode=cv2.BORDER_REPLICATE)
+    Xtr = cv2.transpose(Xtr)
+
+    Ytr = cv2.warpAffine(Yt,rot_mat,Yt.shape[0:2],borderMode=cv2.BORDER_REPLICATE)
+    Ytr = cv2.transpose(Ytr)
+
+    # Add shadow
+    Xtr = random_shadow(Xtr)
+
+    return Xtr, Ytr
+
+def gen_batch_function(data_folder, image_shape, augment=False):
     """
     Generate function to create batches of training data
     :param data_folder: Path to folder that contains all the datasets
@@ -87,6 +175,10 @@ def gen_batch_function(data_folder, image_shape):
                 image = scipy.misc.imresize(scipy.misc.imread(image_file), image_shape)
                 gt_image = scipy.misc.imresize(scipy.misc.imread(gt_image_file), image_shape)
 
+                if augment:
+                    image = random_shadow(image)
+                    # image, gt_image = augment_image(image, gt_image)
+
                 gt_bg = np.all(gt_image == background_color, axis=2)
                 gt_bg = gt_bg.reshape(*gt_bg.shape, 1)
                 gt_image = np.concatenate((gt_bg, np.invert(gt_bg)), axis=2)
@@ -94,7 +186,19 @@ def gen_batch_function(data_folder, image_shape):
                 images.append(image)
                 gt_images.append(gt_image)
 
-            yield np.array(images), np.array(gt_images)
+            # Convert to numpy arrays
+            X = np.array(images)
+            Y = np.array(gt_images)
+
+            if augment:
+                # Randomly flip each image
+                # (This code can be vectorized, which is why it is not in
+                # augment_image)
+                flip_selector = rand(X.shape[0]) > 0.5
+                X[flip_selector,:] = np.flip(X[flip_selector,:],axis=2)
+                Y[flip_selector,:] = np.flip(Y[flip_selector,:],axis=2)
+
+            yield X, Y
     return get_batches_fn
 
 
