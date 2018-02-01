@@ -11,7 +11,7 @@ import time
 assert LooseVersion(tf.__version__) >= LooseVersion('1.0'), 'Please use TensorFlow version 1.0 or newer.  You are using {}'.format(tf.__version__)
 print('TensorFlow Version: {}'.format(tf.__version__))
 
-LEARNING_RATE = 5e-5
+LEARNING_RATE = 1e-4
 KEEP_PROB = 0.5
 
 # Using conda environment: carnd-term1-gpu
@@ -162,7 +162,7 @@ def run():
     runs_dir = './runs'
     tests.test_for_kitti_dataset(data_dir)
 
-    epochs = 20
+    epochs = 1
     batch_size = 2
 
     # Download pretrained vgg model
@@ -177,7 +177,7 @@ def run():
         vgg_path = os.path.join(data_dir, 'vgg')
 
         # Create function to get batches with image augmentation (rotation, random shadows)
-        get_batches_fn = helper.gen_batch_function(os.path.join(data_dir, 'data_road/training'), image_shape, augment=True)
+        get_batches_fn = helper.gen_batch_function(os.path.join(data_dir, 'data_road/training'), image_shape, augment=False)
 
         # Build NN using load_vgg, layers, and optimize function
         input_image, keep_prob, layer3_out, layer4_out, layer7_out = load_vgg(sess, vgg_path)
