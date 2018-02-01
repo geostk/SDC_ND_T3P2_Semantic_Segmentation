@@ -108,43 +108,43 @@ def augment_image(X, Y, rot=15., trans=5.):
     # ::: Ignore translate, just rotate
 
     # X translation direction
-    # trans_option = np.random.randint(0,3,1) # (left, center, right)
-    # trans_offset = truncated_normal(1,3.,(trans_option-1.)*trans) # in the range of [-6-trans,6+trans]
+    trans_option = np.random.randint(0,3,1) # (left, center, right)
+    trans_offset = truncated_normal(1,3.,(trans_option-1.)*trans) # in the range of [-6-trans,6+trans]
 
     # Rotation direction
-    rot_option = np.random.randint(0,3,1) # (cw, center, ccw)
-    rot_offset = truncated_normal(1,3.,(rot_option-1.)*rot)
+    # rot_option = np.random.randint(0,3,1) # (cw, center, ccw)
+    # rot_offset = truncated_normal(1,3.,(rot_option-1.)*rot)
 
     # Random x translation
-    # tx = truncated_normal(1,5.,trans_offset) # [-16-trans,16+trans]
-    # ty = truncated_normal(1,2.,trans_offset)
+    tx = truncated_normal(1,5.,trans_offset) # [-16-trans,16+trans]
+    ty = truncated_normal(1,5.,trans_offset)
 
     # Translate image
-    # M = np.float32([[1.,0.,tx],[0.,1.,ty]])
-    # Xt = cv2.warpAffine(X,M,(X.shape[0:2]),borderMode=cv2.BORDER_REPLICATE)
-    # Xt = cv2.transpose(Xt)
-    #
-    # Yt = cv2.warpAffine(Y,M,(Y.shape[0:2]),borderMode=cv2.BORDER_REPLICATE)
-    # Yt = cv2.transpose(Yt)
+    M = np.float32([[1.,0.,tx],[0.,1.,ty]])
+    Xt = cv2.warpAffine(X,M,(X.shape[0:2]),borderMode=cv2.BORDER_REPLICATE)
+    Xt = cv2.transpose(Xt)
 
-    Xt = X
-    Yt = Y
+    Yt = cv2.warpAffine(Y,M,(Y.shape[0:2]),borderMode=cv2.BORDER_REPLICATE)
+    Yt = cv2.transpose(Yt)
+
+    # Xt = X
+    # Yt = Y
 
     # Rotate image
-    center = tuple(np.array(X.shape[0:2])/2)
-    th = truncated_normal(1,7.,rot_offset)
-
-    rot_mat = cv2.getRotationMatrix2D(center,th,1.)
-    Xtr = cv2.warpAffine(Xt,rot_mat,Xt.shape[0:2],borderMode=cv2.BORDER_REPLICATE)
-    Xtr = cv2.transpose(Xtr)
-
-    Ytr = cv2.warpAffine(Yt,rot_mat,Yt.shape[0:2],borderMode=cv2.BORDER_REPLICATE)
-    Ytr = cv2.transpose(Ytr)
+    # center = tuple(np.array(X.shape[0:2])/2)
+    # th = truncated_normal(1,7.,rot_offset)
+    #
+    # rot_mat = cv2.getRotationMatrix2D(center,th,1.)
+    # Xtr = cv2.warpAffine(Xt,rot_mat,Xt.shape[0:2],borderMode=cv2.BORDER_REPLICATE)
+    # Xtr = cv2.transpose(Xtr)
+    #
+    # Ytr = cv2.warpAffine(Yt,rot_mat,Yt.shape[0:2],borderMode=cv2.BORDER_REPLICATE)
+    # Ytr = cv2.transpose(Ytr)
 
     # Add shadow
-    Xtr = random_shadow(Xtr)
+    Xt = random_shadow(Xt)
 
-    return Xtr, Ytr
+    return Xt, Yt
 
 def gen_batch_function(data_folder, image_shape, augment=False):
     """

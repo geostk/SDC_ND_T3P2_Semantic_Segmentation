@@ -11,7 +11,7 @@ import time
 assert LooseVersion(tf.__version__) >= LooseVersion('1.0'), 'Please use TensorFlow version 1.0 or newer.  You are using {}'.format(tf.__version__)
 print('TensorFlow Version: {}'.format(tf.__version__))
 
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 5e-5
 KEEP_PROB = 0.5
 
 # Using conda environment: carnd-term1-gpu
@@ -83,7 +83,7 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
 
     # scale layers
     vgg_layer3_out = tf.multiply(vgg_layer3_out, 0.0001)
-    vgg_layer4_out = tf.multiply(vgg_layer4_out, 0.01)
+    vgg_layer4_out = tf.multiply(vgg_layer4_out, 0.001)
 
     # apply 1x1 convolutions to all of the input layers
     l7_1x1 = conv2d_1x1(vgg_layer7_out,N)
@@ -115,9 +115,14 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits= logits, labels= correct_label))
     # define training operation
     optimizer = tf.train.AdamOptimizer(learning_rate= learning_rate)
-    train_op = optimizer.minimize(cross_entropy_loss)
 
-    return logits, train_op, cross_entropy_loss
+    reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+    l2_const = 5e-3;
+    loss = cross_entropy_loss + l2_const * sum(reg_losses)
+
+    train_op = optimizer.minimize(loss)
+
+    return logits, train_op, loss
 tests.test_optimize(optimize)
 
 
@@ -140,9 +145,11 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
 
     for epoch in range(epochs):
         start = time.time()
+        total_loss = 0;
         for image, label in get_batches_fn(batch_size):
             _, loss = sess.run([train_op, cross_entropy_loss], feed_dict = {input_image: image, correct_label: label, keep_prob: KEEP_PROB, learning_rate: LEARNING_RATE})
-        print("Epoch: {}/{}, Loss: {:.4f}, dt: {}".format(epoch+1,epochs,loss,time.time()-start))
+            total_loss += loss
+        print("Epoch: {}/{}, Loss: {:.4f}, Total-loss: {:.4f}, dt: {}".format(epoch+1,epochs,loss,total_loss,time.time()-start))
 
 tests.test_train_nn(train_nn)
 
@@ -150,12 +157,13 @@ tests.test_train_nn(train_nn)
 def run():
     num_classes = 2
     image_shape = (160, 576)
+    # image_shape = (64, 230)
     data_dir = './data'
     runs_dir = './runs'
     tests.test_for_kitti_dataset(data_dir)
 
-    epochs = 40
-    batch_size = 16
+    epochs = 20
+    batch_size = 2
 
     # Download pretrained vgg model
     helper.maybe_download_pretrained_vgg(data_dir)
@@ -163,13 +171,13 @@ def run():
     # OPTIONAL: Train and Inference on the cityscapes dataset instead of the Kitti dataset.
     # You'll need a GPU with at least 10 teraFLOPS to train on.
     #  https://www.cityscapes-dataset.com/
-
+    # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1,allow_growth=True)
     with tf.Session() as sess:
         # Path to vgg model
         vgg_path = os.path.join(data_dir, 'vgg')
 
         # Create function to get batches with image augmentation (rotation, random shadows)
-        get_batches_fn = helper.gen_batch_function(os.path.join(data_dir, 'data_road/training'), image_shape, augment=False)
+        get_batches_fn = helper.gen_batch_function(os.path.join(data_dir, 'data_road/training'), image_shape, augment=True)
 
         # Build NN using load_vgg, layers, and optimize function
         input_image, keep_prob, layer3_out, layer4_out, layer7_out = load_vgg(sess, vgg_path)
@@ -181,7 +189,6 @@ def run():
 
         # Train NN using the train_nn function
         train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, input_image, correct_label, keep_prob, learning_rate)
-
         # Save inference data using helper.save_inference_samples
         helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
 
