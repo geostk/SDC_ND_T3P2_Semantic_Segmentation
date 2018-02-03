@@ -12,7 +12,7 @@ assert LooseVersion(tf.__version__) >= LooseVersion('1.0'), 'Please use TensorFl
 print('TensorFlow Version: {}'.format(tf.__version__))
 
 LEARNING_RATE = 1e-4
-KEEP_PROB = 0.5
+KEEP_PROB = 0.8
 
 # Using conda environment: carnd-term1-gpu
 
@@ -162,7 +162,7 @@ def run():
     runs_dir = './runs'
     tests.test_for_kitti_dataset(data_dir)
 
-    epochs = 1
+    epochs = 20
     batch_size = 2
 
     # Download pretrained vgg model
